@@ -97,8 +97,21 @@ class ConditionForm(forms.ModelForm):
         # We don't save a new model if a custom condition has been chosen,
         # we simply return the instance that has been chosen
         if self.cleaned_data['custom_condition']:
-            return Condition.objects.get(
-                id=self.cleaned_data['custom_condition'])
+            custom_condition = Condition.objects.get(id=int(self.cleaned_data['custom_condition']))
+            proxy_class = custom_condition.proxy_class
+            values = {
+                'range': self.cleaned_data['range'],
+                'proxy_class': proxy_class,
+            }
+            try:
+                obj = Condition.objects.filter(id=self.cleaned_data['custom_condition']).get(**values)
+                for key, value in values.iteritems():
+                    setattr(obj, key, value)
+                obj.save()
+            except Condition.DoesNotExist:
+                obj = Condition(**values)
+                obj.save()
+            return obj
         return super(ConditionForm, self).save(*args, **kwargs)
 
 
@@ -151,8 +164,21 @@ class BenefitForm(forms.ModelForm):
         # We don't save a new model if a custom benefit has been chosen,
         # we simply return the instance that has been chosen
         if self.cleaned_data['custom_benefit']:
-            return Benefit.objects.get(
-                id=self.cleaned_data['custom_benefit'])
+            custom_benefit = Benefit.objects.get(id=int(self.cleaned_data['custom_benefit']))
+            proxy_class = custom_benefit.proxy_class
+            values = {
+                'range': self.cleaned_data['range'],
+                'proxy_class': proxy_class,
+            }
+            try:
+                obj = Benefit.objects.filter(id=self.cleaned_data['custom_benefit']).get(**values)
+                for key, value in values.iteritems():
+                    setattr(obj, key, value)
+                obj.save()
+            except Benefit.DoesNotExist:
+                obj = Benefit(**values)
+                obj.save()
+            return obj
         return super(BenefitForm, self).save(*args, **kwargs)
 
 

@@ -37,8 +37,18 @@ def create_condition(condition_class):
     """
     Create a custom condition instance
     """
-    return Condition.objects.create(
-        proxy_class=_class_path(condition_class))
+    values = {
+        'proxy_class': _class_path(condition_class),
+    }
+    try:
+        obj = Condition.objects.filter(range_id__isnull=True).get(**values)
+        for key, value in values.iteritems():
+            setattr(obj, key, value)
+        obj.save()
+    except Condition.DoesNotExist:
+        obj = Condition(**values)
+        obj.save()
+    return obj
 
 
 def create_benefit(benefit_class):
@@ -50,5 +60,15 @@ def create_benefit(benefit_class):
     if benefit_class.description is Benefit.description:
         raise RuntimeError("Your custom benefit must implement its own "
                            "'description' property")
-    return Benefit.objects.create(
-        proxy_class=_class_path(benefit_class))
+    values = {
+        'proxy_class': _class_path(benefit_class),
+    }
+    try:
+        obj = Benefit.objects.filter(range_id__isnull=True).get(**values)
+        for key, value in values.iteritems():
+            setattr(obj, key, value)
+        obj.save()
+    except Benefit.DoesNotExist:
+        obj = Benefit(**values)
+        obj.save()
+    return obj

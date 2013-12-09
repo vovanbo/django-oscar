@@ -437,7 +437,7 @@ class Condition(models.Model):
                                  null=True, blank=True)
 
     proxy_class = models.CharField(_("Custom class"), null=True, blank=True,
-                                   max_length=255, unique=True, default=None)
+                                   max_length=255, default=None)
 
     class Meta:
         verbose_name = _("Condition")
@@ -562,7 +562,7 @@ class Benefit(models.Model):
     # A custom benefit class can be used instead.  This means the
     # type/value/max_affected_items fields should all be None.
     proxy_class = models.CharField(_("Custom class"), null=True, blank=True,
-                                   max_length=255, unique=True, default=None)
+                                   max_length=255, default=None)
 
     class Meta:
         verbose_name = _("Benefit")
