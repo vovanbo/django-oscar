@@ -4,13 +4,8 @@ import traceback
 from django.conf import settings
 from django.db.models import get_model as django_get_model
 
-
-class AppNotFoundError(Exception):
-    pass
-
-
-class ClassNotFoundError(Exception):
-    pass
+from oscar.core.exceptions import (ModuleNotFoundError, ClassNotFoundError,
+                                   AppNotFoundError)
 
 
 def get_class(module_label, classname):
@@ -33,7 +28,7 @@ def get_class(module_label, classname):
 
 def get_classes(module_label, classnames):
     """
-    Dynamically import a list of  classes from the given module.
+    Dynamically import a list of classes from the given module.
 
     This works by looping over ``INSTALLED_APPS`` and looking for a match
     against the passed module label.  If the requested class can't be found in
@@ -94,6 +89,15 @@ def get_classes(module_label, classnames):
     else:
         # The entry is obviously an Oscar one, we don't import again
         local_module = None
+
+    if oscar_module is local_module is None:
+        # This intentionally doesn't rise an ImportError, because it would get
+        # masked by in some circular import scenarios.
+        raise ModuleNotFoundError(
+            "The module with label '%s' could not be imported. This either"
+            "means that it indeed does not exist, or you might have a problem"
+            " with a circular import." % module_label
+        )
 
     # return imported classes, giving preference to ones from the local package
     return _pluck_classes([local_module, oscar_module], classnames)
