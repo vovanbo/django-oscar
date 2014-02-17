@@ -1,5 +1,5 @@
 from haystack import indexes
-from django.utils.translation import ugettext_lazy as _
+from django.conf import settings
 
 from oscar.core.loading import get_model, get_class
 
@@ -19,10 +19,13 @@ class ProductIndex(indexes.SearchIndex, indexes.Indexable):
 
     # Fields for faceting
     product_class = indexes.CharField(null=True, faceted=True)
-    category = indexes.CharField(null=True, faceted=True)
+    category = indexes.MultiValueField(null=True, faceted=True)
     price = indexes.DecimalField(null=True, faceted=True)
     num_in_stock = indexes.IntegerField(null=True, faceted=True)
     rating = indexes.IntegerField(null=True, faceted=True)
+
+    # Spelling suggestions
+    suggestions = indexes.FacetCharField()
 
     date_created = indexes.DateTimeField(model_attr='date_created')
     date_updated = indexes.DateTimeField(model_attr='date_updated')
@@ -43,7 +46,7 @@ class ProductIndex(indexes.SearchIndex, indexes.Indexable):
     def prepare_category(self, obj):
         categories = obj.categories.all()
         if len(categories) > 0:
-            return categories[0].full_name
+            return [category.full_name for category in categories]
 
     def prepare_rating(self, obj):
         if obj.rating is not None:
@@ -73,6 +76,19 @@ class ProductIndex(indexes.SearchIndex, indexes.Indexable):
         elif obj.has_stockrecords:
             result = strategy.fetch_for_product(obj)
             return result.stockrecord.net_stock_level
+
+    def prepare(self, obj):
+        prepared_data = super(ProductIndex, self).prepare(obj)
+
+        # We use Haystack's dynamic fields to ensure that the title field used
+        # for sorting is of type "string'.
+        if 'solr' in settings.HAYSTACK_CONNECTIONS['default']['ENGINE']:
+            prepared_data['title_s'] = prepared_data['title']
+
+        # Use title to for spelling suggestions
+        prepared_data['suggestions'] = prepared_data['text']
+
+        return prepared_data
 
     def get_updated_field(self):
         """
