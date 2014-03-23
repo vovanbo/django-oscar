@@ -36,6 +36,7 @@ except ImportError:
 
 from oscar.core.utils import slugify
 
+
 class AutoSlugField(SlugField):
     """ AutoSlugField
 
@@ -68,6 +69,7 @@ class AutoSlugField(SlugField):
             self._populate_from = populate_from
         self.separator = kwargs.pop('separator', six.u('-'))
         self.overwrite = kwargs.pop('overwrite', False)
+        self.uppercase = kwargs.pop('uppercase', False)
         self.allow_duplicates = kwargs.pop('allow_duplicates', False)
         super(AutoSlugField, self).__init__(*args, **kwargs)
 
@@ -119,6 +121,10 @@ class AutoSlugField(SlugField):
         if slug_len:
             slug = slug[:slug_len]
         slug = self._slug_strip(slug)
+
+        if self.uppercase:
+            slug = slug.upper()
+
         original_slug = slug
 
         if self.allow_duplicates:

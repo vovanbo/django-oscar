@@ -248,7 +248,6 @@ INSTALLED_APPS = [
     'debug_toolbar',
     # For profile testing
     'apps.user',
-    'apps.bigbang',
     # Sentry (for live demo site)
     'raven.contrib.django.raven_compat'
 ]
@@ -276,6 +275,8 @@ HAYSTACK_CONNECTIONS = {
     },
 }
 
+# We still use this deprecated Django setting since Oscar needs a way of
+# knowing where the profile class is (if one is used).
 AUTH_PROFILE_MODULE = 'user.Profile'
 
 # Oscar settings

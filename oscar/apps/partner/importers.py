@@ -1,5 +1,6 @@
 import os
 from decimal import Decimal as D
+from datetime import datetime
 
 from django.utils.translation import ugettext_lazy as _
 
@@ -20,94 +21,10 @@ ProductClass, Product, Category, ProductCategory = get_classes(
                          'ProductCategory'))
 
 
-class StockImporter(object):
-
-    def __init__(self, logger, partner, delimiter):
-        self.logger = logger
-        self._delimiter = delimiter
-
-        try:
-            self._partner = Partner.objects.get(name=partner)
-        except Partner.DoesNotExist:
-            name_list = ", ".join([d['name']
-                                   for d in Partner.objects.values('name')])
-            raise ImportingError(_("Partner named '%(partner)s' does not exist"
-                                   " (existing partners: %(list)s)")
-                                 % {'partner': partner, 'list': name_list})
-
-    def handle(self, file_path=None):
-        u"""Handles the actual import process"""
-        if not file_path:
-            raise ImportingError(_("No file path supplied"))
-        Validator().validate(file_path)
-        self._import(file_path)
-
-    def _import(self, file_path):
-        u"""Imports given file"""
-        stats = {'updated_items': 0,
-                 'unchanged_items': 0,
-                 'unmatched_items': 0}
-        row_number = 0
-        with UnicodeCSVReader(
-                file_path, delimiter=self._delimiter,
-                quotechar='"', escapechar='\\') as reader:
-            for row in reader:
-                row_number += 1
-                self._import_row(row_number, row, stats)
-        msg = "\tUpdated items: %d\n\tUnchanged items: %d\n" \
-            "\tUnmatched items: %d" % (stats['updated_items'],
-                                       stats['unchanged_items'],
-                                       stats['unmatched_items'])
-        self.logger.info(msg)
-
-    def _import_row(self, row_number, row, stats):
-        if len(row) != 3:
-            self.logger.error("Row number %d has an invalid number of fields,"
-                              " skipping..." % row_number)
-        else:
-            self._update_stockrecord(*row[:3], row_number=row_number,
-                                     stats=stats)
-
-    def _update_stockrecord(self, partner_sku, price_excl_tax, num_in_stock,
-                            row_number, stats):
-        try:
-            stock = StockRecord.objects.get(partner=self._partner,
-                                            partner_sku=partner_sku)
-        except StockRecord.DoesNotExist:
-            stats['unmatched_items'] += 1
-            self.logger.error("\t - Row %d: StockRecord for partner '%s' and"
-                              " sku '%s' does not exist, skipping..."
-                              % (row_number, self._partner, partner_sku))
-            return
-
-        price_changed = False
-        if stock.price_excl_tax != D(price_excl_tax):
-            stock.price_excl_tax = D(price_excl_tax)
-            price_changed = True
-
-        stock_changed = False
-        if stock.num_in_stock != int(num_in_stock):
-            stock.num_in_stock = num_in_stock
-            stock_changed = True
-
-        if price_changed or stock_changed:
-            stock.save()
-
-            msg = " SKU %s:" % (partner_sku)
-            if price_changed:
-                msg += '\n - Price set to %s' % (price_excl_tax)
-            if stock_changed:
-                msg += '\n - Stock set to %s' % num_in_stock
-            self.logger.info(msg)
-            stats['updated_items'] += 1
-        else:
-            stats['unchanged_items'] += 1
-
-
-# Deprecated
 class CatalogueImporter(object):
     """
-    A catalogue importer object
+    CSV product importer used to built sandbox. Might not work very well
+    for anything else.
     """
 
     _flush = False
@@ -129,8 +46,8 @@ class CatalogueImporter(object):
 
     def _flush_product_data(self):
         u"""Flush out product and stock models"""
-        ProductClass.objects.all().delete()
         Product.objects.all().delete()
+        ProductClass.objects.all().delete()
         Partner.objects.all().delete()
         StockRecord.objects.all().delete()
 
@@ -229,3 +146,88 @@ class Validator(object):
             f.close()
         except:
             raise ImportingError(_("%s is not readable") % (file_path))
+
+
+class DemoSiteImporter(object):
+    """
+    Another quick and dirty catalogue product importer. Used to built the
+    demo site, and most likely not useful outside of it.
+    """
+
+    def __init__(self, logger):
+        self.logger = logger
+
+    @atomic_compat
+    def handle(self, product_class_name, filepath):
+        product_class = ProductClass.objects.get(
+            name=product_class_name)
+
+        attribute_codes = []
+        with UnicodeCSVReader(filepath) as reader:
+            for row in reader:
+                if row[1] == 'UPC':
+                    attribute_codes = row[9:]
+                    continue
+                self.create_product(product_class, attribute_codes,  row)
+
+    def create_product(self, product_class, attribute_codes, row):  # noqa
+        (ptype, upc, title, description,
+         category, partner, sku, price, stock) = row[0:9]
+
+        # Create product
+        is_variant = ptype.lower() == 'variant'
+        is_group = ptype.lower() == 'group'
+        if upc:
+            try:
+                product = Product.objects.get(upc=upc)
+            except Product.DoesNotExist:
+                product = Product(upc=upc)
+        else:
+            product = Product()
+
+        if not is_variant:
+            product.title = title
+            product.description = description
+            product.product_class = product_class
+
+        # Attributes
+        if not is_group:
+            for code, value in zip(attribute_codes, row[9:]):
+                # Need to check if the attribute requires an Option instance
+                attr = product_class.attributes.get(
+                    code=code)
+                if attr.is_option:
+                    value = attr.option_group.options.get(option=value)
+                if attr.type == 'date':
+                    value = datetime.strptime(value, "%d/%m/%Y").date()
+                setattr(product.attr, code, value)
+
+        # Assign parent for variants
+        if is_variant:
+            product.parent = self.parent
+
+        product.save()
+
+        # Save a reference to last group product
+        if is_group:
+            self.parent = product
+
+        # Category information
+        if category:
+            leaf = create_from_breadcrumbs(category)
+            ProductCategory.objects.get_or_create(
+                product=product, category=leaf)
+
+        # Stock record
+        if partner:
+            partner, __ = Partner.objects.get_or_create(name=partner)
+            try:
+                record = StockRecord.objects.get(product=product)
+            except StockRecord.DoesNotExist:
+                record = StockRecord(product=product)
+            record.partner = partner
+            record.partner_sku = sku
+            record.price_excl_tax = D(price)
+            if stock != 'NULL':
+                record.num_in_stock = stock
+            record.save()

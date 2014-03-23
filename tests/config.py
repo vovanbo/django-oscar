@@ -54,6 +54,8 @@ def configure():
                 location('templates'),
                 oscar.OSCAR_MAIN_TEMPLATE_DIR,
             ),
+            'TEMPLATE_LOADERS': (('django.template.loaders.cached.Loader',
+                                     global_settings.TEMPLATE_LOADERS),),
             'MIDDLEWARE_CLASSES': global_settings.MIDDLEWARE_CLASSES + (
                 'oscar.apps.basket.middleware.BasketMiddleware',
             ),
@@ -75,6 +77,7 @@ def configure():
             'ADMINS': ('admin@example.com',),
             'DEBUG': False,
             'SITE_ID': 1,
+            'USE_TZ': 1,
             'APPEND_SLASH': True,
             'DDF_DEFAULT_DATA_FIXTURE': 'tests.dynamic_fixtures.OscarDynamicDataFixtureClass',
             'SESSION_SERIALIZER': 'django.contrib.sessions.serializers.JSONSerializer',

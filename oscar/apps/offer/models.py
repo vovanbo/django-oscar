@@ -177,10 +177,6 @@ class ConditionalOffer(models.Model):
         verbose_name = _("Conditional offer")
         verbose_name_plural = _("Conditional offers")
 
-        # The way offers are looked up involves the fields (offer_type, status,
-        # start_datetime, end_datetime).  Ideally, you want a DB index that
-        # covers these 4 fields (will add support for this in Django 1.5)
-
     def save(self, *args, **kwargs):
         # Check to see if consumption thresholds have been broken
         if not self.is_suspended:
@@ -423,7 +419,7 @@ class Condition(models.Model):
     range = models.ForeignKey(
         'offer.Range', verbose_name=_("Range"), null=True, blank=True)
     type = models.CharField(_('Type'), max_length=128, choices=TYPE_CHOICES,
-                            null=True, blank=True)
+                            blank=True)
     value = PositiveDecimalField(_('Value'), decimal_places=2, max_digits=12,
                                  null=True, blank=True)
 
@@ -761,7 +757,7 @@ class Range(models.Model):
         verbose_name=_("Excluded Products"))
     classes = models.ManyToManyField(
         'catalogue.ProductClass', related_name='classes', blank=True,
-        verbose_name=_("Product Classes"))
+        verbose_name=_("Product Types"))
     included_categories = models.ManyToManyField(
         'catalogue.Category', related_name='includes', blank=True,
         verbose_name=_("Included Categories"))

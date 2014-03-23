@@ -17,6 +17,7 @@ from oscar.views.generic import PostActionMixin
 from oscar.apps.customer.utils import get_password_reset_url
 from oscar.core.loading import get_class, get_profile_class, get_classes
 from oscar.core.compat import get_user_model
+from . import signals
 
 PageTitleMixin, RegisterUserMixin = get_classes(
     'customer.mixins', ['PageTitleMixin', 'RegisterUserMixin'])
@@ -27,7 +28,6 @@ EmailAuthenticationForm, EmailUserCreationForm, OrderSearchForm = get_classes(
 ProfileForm, ConfirmPasswordForm = get_classes(
     'customer.forms', ['ProfileForm', 'ConfirmPasswordForm'])
 UserAddressForm = get_class('address.forms', 'UserAddressForm')
-user_registered = get_class('customer.signals', 'user_registered')
 Order = get_model('order', 'Order')
 Line = get_model('basket', 'Line')
 Basket = get_model('basket', 'Basket')
@@ -164,7 +164,20 @@ class AccountAuthView(RegisterUserMixin, TemplateView):
     def validate_login_form(self):
         form = self.get_login_form(self.request)
         if form.is_valid():
+            user = form.get_user()
+
+            # Grab a reference to the session ID before logging in
+            old_session_key = self.request.session.session_key
+
             auth_login(self.request, form.get_user())
+
+            # Raise signal robustly (we don't want exceptions to crash the
+            # request handling). We use a custom signal as we want to track the
+            # session key before calling login (which cycles the session ID).
+            signals.user_logged_in.send_robust(
+                sender=self, request=self.request, user=user,
+                old_session_key=old_session_key)
+
             return HttpResponseRedirect(form.cleaned_data['redirect_url'])
 
         ctx = self.get_context_data(login_form=form)
@@ -181,7 +194,7 @@ class AccountAuthView(RegisterUserMixin, TemplateView):
 
 
 class LogoutView(RedirectView):
-    url = reverse_lazy('promotions:home')
+    url = settings.OSCAR_HOMEPAGE
     permanent = False
 
     def get(self, request, *args, **kwargs):
@@ -272,7 +285,8 @@ class ProfileUpdateView(PageTitleMixin, FormView):
 
         # We have to look up the email address from the form's
         # cleaned data because the object created by form.save() can
-        # either be a user or profile depending on AUTH_PROFILE_MODULE
+        # either be a user or profile instance depending whether a profile
+        # class has been specified by the AUTH_PROFILE_MODULE setting.
         new_email = form.cleaned_data['email']
         if old_user and new_email != old_user.email:
             # Email address has changed - send a confirmation email to the old
@@ -300,6 +314,7 @@ class ProfileDeleteView(PageTitleMixin, FormView):
     template_name = 'customer/profile/profile_delete.html'
     page_title = _('Delete profile')
     active_tab = 'profile'
+    success_url = settings.OSCAR_HOMEPAGE
 
     def get_form_kwargs(self):
         kwargs = super(ProfileDeleteView, self).get_form_kwargs()
@@ -312,9 +327,6 @@ class ProfileDeleteView(PageTitleMixin, FormView):
             self.request,
             _("Your profile has now been deleted. Thanks for using the site."))
         return HttpResponseRedirect(self.get_success_url())
-
-    def get_success_url(self):
-        return reverse('promotions:home')
 
 
 class ChangePasswordView(PageTitleMixin, FormView):

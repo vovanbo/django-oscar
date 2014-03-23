@@ -203,7 +203,9 @@ Let us know if you're writing a new one!
 License
 -------
 
-Oscar is released under the permissive `New BSD license`_.
+Oscar is released under the permissive `New BSD license`_ (see summary_).
+
+.. _summary: https://tldrlegal.com/license/bsd-3-clause-license-(revised)
 
 .. _`New BSD license`: https://github.com/tangentlabs/django-oscar/blob/master/LICENSE
 
@@ -257,6 +259,7 @@ Non-Tangent:
 * Garmsby - https://garmsby.co.uk
 * Partecipa Cards - http://www.partecipacards.com
 * Chiyome - https://chiyome.com
+* Bike Parts Market - https://www.bikepartsmarket.com
 
 .. image:: https://github.com/tangentlabs/django-oscar/raw/master/docs/images/screenshots/dolbeau.thumb.png
     :target: http://www.dolbeau.ca
@@ -287,6 +290,9 @@ Non-Tangent:
 
 .. image:: https://github.com/tangentlabs/django-oscar/raw/master/docs/images/screenshots/chiyome.thumb.png
     :target: https://chiyome.com
+
+.. image:: https://github.com/tangentlabs/django-oscar/raw/master/docs/images/screenshots/bpm.thumb.png
+    :target: https://www.bikepartsmarket.com
 
 Many more on the way.  If you use Oscar in production, please let us know.
 

@@ -7,7 +7,7 @@ from oscar.core.loading import get_model
 from django.utils.translation import ugettext_lazy as _
 
 from oscar.core.loading import get_class
-from oscar.apps.catalogue.signals import product_viewed, product_search
+from oscar.apps.catalogue.signals import product_viewed
 
 Product = get_model('catalogue', 'product')
 ProductReview = get_model('reviews', 'ProductReview')
@@ -51,7 +51,10 @@ class ProductDetailView(DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super(ProductDetailView, self).get_context_data(**kwargs)
-        ctx['reviews'] = self.get_reviews()
+        reviews = self.get_reviews()
+        ctx['reviews'] = reviews
+        # to be sure .count() query will be made only once
+        ctx['reviews_count'] = reviews.count()
         ctx['alert_form'] = self.get_alert_form()
         ctx['has_active_alert'] = self.get_alert_status()
 
@@ -127,76 +130,39 @@ class ProductCategoryView(ListView):
         if 'pk' in self.kwargs:
             self.category = get_object_or_404(Category, pk=self.kwargs['pk'])
         else:
-            self.category = get_object_or_404(
-                Category, slug=self.kwargs['category_slug'])
+            self.category = None
 
     def get(self, request, *args, **kwargs):
         self.get_object()
-        self.categories = self.get_categories()
-
-        if self.enforce_paths:
+        if self.enforce_paths and self.category is not None:
             # Categories are fetched by primary key to allow slug changes
             # If the slug has indeed changed, issue a redirect
             correct_path = self.category.get_absolute_url()
             if correct_path != request.path:
                 return HttpResponsePermanentRedirect(correct_path)
-
         return super(ProductCategoryView, self).get(request, *args, **kwargs)
 
     def get_categories(self):
         """
         Return a list of the current category and it's ancestors
         """
-        categories = list(self.category.get_descendants())
-        categories.append(self.category)
-        return categories
+        return list(self.category.get_descendants()) + [self.category]
+
+    def get_summary(self):
+        """
+        Summary to be shown in template
+        """
+        return self.category.name if self.category else _('All products')
 
     def get_context_data(self, **kwargs):
         context = super(ProductCategoryView, self).get_context_data(**kwargs)
-
-        context['categories'] = self.categories
         context['category'] = self.category
-        context['summary'] = self.category.name
+        context['summary'] = self.get_summary()
         return context
 
     def get_queryset(self):
-        return Product.browsable.base_queryset().filter(
-            categories__in=self.categories
-        ).distinct()
-
-
-class ProductListView(ListView):
-    """
-    A list of products
-    """
-    context_object_name = "products"
-    template_name = 'catalogue/browse.html'
-    paginate_by = settings.OSCAR_PRODUCTS_PER_PAGE
-    search_signal = product_search
-    model = Product
-
-    def get_search_query(self):
-        q = self.request.GET.get('q', None)
-        return q.strip() if q else q
-
-    def get_queryset(self):
-        q = self.get_search_query()
         qs = Product.browsable.base_queryset()
-        if q:
-            # Send signal to record this search
-            self.search_signal.send(sender=self, query=q,
-                                    user=self.request.user)
-            return qs.filter(title__icontains=q)
-        else:
-            return qs
-
-    def get_context_data(self, **kwargs):
-        context = super(ProductListView, self).get_context_data(**kwargs)
-        q = self.get_search_query()
-        if not q:
-            context['summary'] = _('All products')
-        else:
-            context['summary'] = _("Products matching '%(query)s'") \
-                % {'query': q}
-            context['search_term'] = q
-        return context
+        if self.category is not None:
+            categories = self.get_categories()
+            qs = qs.filter(categories__in=categories).distinct()
+        return qs
